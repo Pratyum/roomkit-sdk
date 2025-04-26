@@ -10,36 +10,21 @@ A TypeScript SDK for creating and managing real-time rooms using Firebase. This 
 - 📡 **Data Broadcasting**: Share data with all room members
 - 📊 **Event System**: Subscribe to auth, room state, and data events
 
+
 ## Installation
 
-1. Install the required Firebase packages:
-
 ```bash
-npm install firebase
-# or
-yarn add firebase
+# Using npm
+npm install firebase-rooms-sdk firebase
+
+# Using yarn
+yarn add firebase-rooms-sdk firebase
+
+# Using pnpm
+pnpm add firebase-rooms-sdk firebase
 ```
 
-2. Copy the `FirebaseRoomsSDK.ts` file to your project.
-
-## Setup
-
-To use the SDK, you need to initialize it with your Firebase configuration:
-
-```typescript
-import FirebaseRoomsSDK from './FirebaseRoomsSDK';
-
-const firebaseConfig = {
-  apiKey: "your-api-key",
-  authDomain: "your-project-id.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project-id.appspot.com",
-  messagingSenderId: "your-messaging-sender-id",
-  appId: "your-app-id"
-};
-
-const roomsSDK = new FirebaseRoomsSDK(firebaseConfig);
-```
+**Note**: Firebase is a peer dependency. You need to install it separately.
 
 ## Firebase Configuration
 
