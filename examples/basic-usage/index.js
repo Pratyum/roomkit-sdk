@@ -3,13 +3,12 @@ const { FirebaseRoomsSDK } = require('firebase-rooms-sdk');
 
 // Your Firebase config
 const firebaseConfig = {
-    apiKey: "AIzaSyBRtZuv-lX960GLgt7pp9ml_NGXurXRY_Y",
-    authDomain: "superfight-online.firebaseapp.com",
-    projectId: "superfight-online",
-    storageBucket: "superfight-online.firebasestorage.app",
-    messagingSenderId: "765035471548",
-    appId: "1:765035471548:web:4048e1d48fb6acdfa1e6b9",
-    measurementId: "G-TQTYJRLSE6"
+  apiKey: "your-api-key",
+  authDomain: "your-project-id.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project-id.appspot.com",
+  messagingSenderId: "your-messaging-sender-id",
+  appId: "your-app-id"
 };
 
 // Initialize the SDK
