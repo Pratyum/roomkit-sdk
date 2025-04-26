@@ -1,0 +1,7 @@
+onlyBuiltDependencies:
+  - '@firebase/util'
+  - protobufjs
+
+overrides:
+  firebase-rooms-sdk-basic-example: link:examples/basic-usage
+  firebase-rooms-sdk: 'link:'

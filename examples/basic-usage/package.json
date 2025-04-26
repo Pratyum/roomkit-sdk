@@ -1,0 +1,14 @@
+{
+  "name": "firebase-rooms-sdk-basic-example",
+  "version": "0.1.0",
+  "description": "Example usage of firebase-rooms-sdk",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "firebase": "^11.6.1",
+    "firebase-rooms-sdk": "file:../../"
+  }
+}
