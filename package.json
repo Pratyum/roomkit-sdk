@@ -1,6 +1,6 @@
 {
   "name": "firebase-rooms-sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A TypeScript SDK for creating and managing real-time rooms with Firebase",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
@@ -12,7 +12,9 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -c -w",
