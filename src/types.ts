@@ -36,6 +36,7 @@ export interface MemberData {
   joinedAt: Timestamp;
   displayName: string;
   photoURL: string | null;
+  isHost?: boolean;
   [key: string]: any;
 }
 

@@ -5,7 +5,9 @@ A TypeScript SDK for creating and managing real-time rooms using Firebase. This 
 ## Features
 
 - 🔐 **Authentication**: Email/password, anonymous sign-in
+- 👤 **User Management**: Nickname customization, auto-generated names for anonymous users
 - 🚪 **Room Management**: Create, join, and leave rooms
+- 👑 **Host Controls**: Kick members, promote members to hosts
 - 🔄 **Real-time State**: Get and update room state
 - 📡 **Data Broadcasting**: Share data with all room members
 - 📊 **Event System**: Subscribe to auth, room state, and data events
@@ -56,7 +58,7 @@ service cloud.firestore {
 
 ## Usage
 
-### Authentication
+### Authentication and User Management
 
 ```typescript
 // Sign in with email and password
@@ -65,8 +67,11 @@ await roomsSDK.signInWithEmail('user@example.com', 'password123');
 // Create a new user
 await roomsSDK.createUserWithEmail('newuser@example.com', 'newpassword123');
 
-// Sign in anonymously
+// Sign in anonymously (gets an auto-generated nickname)
 await roomsSDK.signInAnonymously();
+
+// Update nickname
+await roomsSDK.updateNickname('CoolUser42');
 
 // Sign out
 await roomsSDK.signOut();
@@ -97,6 +102,22 @@ await roomsSDK.leaveRoom();
 
 // Get the current room state
 const roomState = await roomsSDK.getRoomState();
+
+// Get all room members
+const members = await roomsSDK.getRoomMembers();
+```
+
+### Host Controls
+
+```typescript
+// Check if current user is a host
+const isHost = await roomsSDK.isHost();
+
+// Kick a user from the room (host only)
+await roomsSDK.kickMember('userId123');
+
+// Promote a user to host (host only)
+await roomsSDK.promoteToHost('userId456');
 ```
 
 ### Room State and Communication
@@ -127,11 +148,22 @@ roomsSDK.on('authStateChanged', (user) => {
 // Listen for room state changes
 roomsSDK.on('roomStateChanged', (roomData) => {
   console.log('Room state updated:', roomData);
+  
+  // Access member data
+  Object.entries(roomData.memberData).forEach(([userId, memberData]) => {
+    console.log(`${memberData.displayName} is ${memberData.isHost ? 'a host' : 'a regular member'}`);
+  });
 });
 
 // Listen for incoming data from room members
 roomsSDK.on('dataReceived', (message) => {
-  console.log('New message received:', message);
+  if (message.type === 'system') {
+    // Handle system events (kicks, promotions, etc.)
+    const { action, userId } = message.content;
+    console.log(`System event: ${action}`);
+  } else {
+    console.log(`Message from ${message.senderName}: ${message.content}`);
+  }
 });
 
 // Remove event listeners
@@ -145,7 +177,8 @@ roomsSDK.off('dataReceived', myCallback);
 
 - `signInWithEmail(email: string, password: string)`: Sign in with email/password
 - `createUserWithEmail(email: string, password: string)`: Create a new user
-- `signInAnonymously()`: Sign in without credentials
+- `signInAnonymously()`: Sign in without credentials (auto-generates a fun nickname)
+- `updateNickname(nickname: string)`: Update user's display name
 - `signOut()`: Sign out the current user
 - `isSignedIn()`: Check if a user is signed in
 - `getCurrentUser()`: Get the current user object
@@ -160,6 +193,13 @@ roomsSDK.off('dataReceived', myCallback);
 - `broadcastData(data: any, type?: string)`: Send data to all room members
 - `isInRoom()`: Check if user is in a room
 - `getCurrentRoomId()`: Get the current room ID
+- `getRoomMembers()`: Get all members in the current room
+
+### Host Control Methods
+
+- `isHost()`: Check if current user is the host
+- `kickMember(userId: string)`: Remove a user from the room (host only)
+- `promoteToHost(userId: string)`: Give another user host privileges (host only)
 
 ### Event Methods
 
@@ -173,7 +213,7 @@ The SDK provides the following TypeScript interfaces:
 - `FirebaseConfig`: Firebase configuration
 - `RoomSettings`: Room creation settings
 - `RoomData`: Room state structure
-- `MemberData`: Room member information
+- `MemberData`: Room member information (including host status)
 - `RoomMessage`: Message/data structure
 - `EventType`: Available event types ('authStateChanged', 'roomStateChanged', 'dataReceived')
 - `EventListener`: Event callback function type
@@ -185,6 +225,7 @@ The SDK throws errors in the following situations:
 - Missing Firebase configuration
 - Authentication required for an operation
 - Room required for an operation
+- Host privileges required for an operation
 - Room does not exist
 - Other Firebase errors
 
