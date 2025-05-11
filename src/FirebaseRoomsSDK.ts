@@ -8,13 +8,15 @@ import {
     onAuthStateChanged,
     signInWithEmailAndPassword,
     User,
-    UserCredential
+    UserCredential,
+    updateProfile
 } from 'firebase/auth';
 import {
     addDoc,
     arrayRemove,
     arrayUnion,
     collection,
+    deleteField,
     doc,
     Firestore,
     getDoc,
@@ -29,6 +31,7 @@ import {
     updateDoc
 } from 'firebase/firestore';
 import { EventType, FirebaseConfig, RoomData, RoomMessage, RoomSettings } from './types';
+import { generateNickname } from './utils';
 
 class FirebaseRoomsSDK {
     private app: FirebaseApp;
@@ -80,15 +83,51 @@ class FirebaseRoomsSDK {
      * @returns Promise resolving to user credentials
      */
     async createUserWithEmail(email: string, password: string): Promise<UserCredential> {
-      return createUserWithEmailAndPassword(this.auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(this.auth, email, password);
+      
+      // Set initial display name from email
+      if (userCredential.user && email) {
+        this.currentUser = userCredential.user;
+        const nickname = email.split('@')[0];
+        await this.updateNickname(nickname);
+      }
+      
+      return userCredential;
     }
     
     /**
-     * Sign in anonymously
+     * Sign in anonymously with a generated nickname
      * @returns Promise resolving to user credentials
      */
     async signInAnonymously(): Promise<UserCredential> {
-      return firebaseSignInAnonymously(this.auth);
+      const userCredential = await firebaseSignInAnonymously(this.auth);
+      
+      // Set a generated nickname for anonymous users
+      if (userCredential.user) {
+        this.currentUser = userCredential.user;
+        const nickname = generateNickname();
+        await this.updateNickname(nickname);
+      }
+      
+      return userCredential;
+    }
+    
+    /**
+     * Update user's display name / nickname
+     */
+    async updateNickname(nickname: string): Promise<void> {
+      this._requireAuth();
+      
+      // Update Firebase Auth profile
+      await updateProfile(this.currentUser!, { displayName: nickname });
+      
+      // If in a room, update the member data
+      if (this.currentRoom) {
+        const roomRef = doc(this.db, 'rooms', this.currentRoom);
+        await updateDoc(roomRef, {
+          [`memberData.${this.currentUser!.uid}.displayName`]: nickname
+        });
+      }
     }
     
     /**
@@ -138,6 +177,14 @@ class FirebaseRoomsSDK {
           isPrivate: settings.isPrivate || false,
           metadata: settings.metadata || {},
           ...settings
+        },
+        memberData: {
+          [this.currentUser!.uid]: {
+            joinedAt: serverTimestamp() as Timestamp,
+            displayName: this.currentUser!.displayName || 'Anonymous',
+            photoURL: this.currentUser!.photoURL || null,
+            isHost: true
+          }
         }
       };
       
@@ -190,11 +237,86 @@ class FirebaseRoomsSDK {
       
       // Remove user from room members
       const roomRef = doc(this.db, 'rooms', this.currentRoom);
+      
+      // Delete member data
       await updateDoc(roomRef, {
-        members: arrayRemove(this.currentUser!.uid)
+        members: arrayRemove(this.currentUser!.uid),
+        [`memberData.${this.currentUser!.uid}`]: deleteField()
       });
       
       this.currentRoom = null;
+    }
+    
+    /**
+     * Kick a user from the room (host only)
+     */
+    async kickMember(userId: string): Promise<void> {
+      this._requireAuth();
+      this._requireRoom();
+      await this._requireHostPrivileges();
+      
+      if (userId === this.currentUser!.uid) {
+        throw new Error("You cannot kick yourself");
+      }
+      
+      const roomRef = doc(this.db, 'rooms', this.currentRoom!);
+      
+      // Remove member from the room
+      await updateDoc(roomRef, {
+        members: arrayRemove(userId),
+        [`memberData.${userId}`]: deleteField()
+      });
+      
+      // Broadcast kick event
+      await this.broadcastData({
+        userId,
+        action: 'kicked',
+        timestamp: new Date().toISOString()
+      }, 'system');
+    }
+    
+    /**
+     * Check if current user is the host of the room
+     */
+    async isHost(): Promise<boolean> {
+      this._requireAuth();
+      this._requireRoom();
+      
+      const roomRef = doc(this.db, 'rooms', this.currentRoom!);
+      const roomDoc = await getDoc(roomRef);
+      
+      if (!roomDoc.exists()) {
+        return false;
+      }
+      
+      const roomData = roomDoc.data() as RoomData;
+      
+      // Check if user is creator or has host role
+      return roomData.createdBy === this.currentUser!.uid || 
+        (roomData.memberData?.[this.currentUser!.uid]?.isHost === true);
+    }
+    
+    /**
+     * Promote a member to host
+     */
+    async promoteToHost(userId: string): Promise<void> {
+      this._requireAuth();
+      this._requireRoom();
+      await this._requireHostPrivileges();
+      
+      const roomRef = doc(this.db, 'rooms', this.currentRoom!);
+      
+      // Update member data to add host status
+      await updateDoc(roomRef, {
+        [`memberData.${userId}.isHost`]: true
+      });
+      
+      // Broadcast promotion event
+      await this.broadcastData({
+        userId,
+        action: 'promoted',
+        timestamp: new Date().toISOString()
+      }, 'system');
     }
     
     /**
@@ -272,6 +394,18 @@ class FirebaseRoomsSDK {
       return this.currentRoom;
     }
     
+    /**
+     * Get all members in the room
+     * @returns Promise resolving to member data or null if not in a room
+     */
+    async getRoomMembers(): Promise<Record<string, any> | null> {
+      this._requireAuth();
+      this._requireRoom();
+      
+      const roomState = await this.getRoomState();
+      return roomState?.memberData || null;
+    }
+    
     // =========== Event Listeners ===========
     
     /**
@@ -321,7 +455,8 @@ class FirebaseRoomsSDK {
         [`memberData.${this.currentUser!.uid}`]: {
           joinedAt: serverTimestamp(),
           displayName: this.currentUser!.displayName || 'Anonymous',
-          photoURL: this.currentUser!.photoURL || null
+          photoURL: this.currentUser!.photoURL || null,
+          isHost: false
         }
       });
       
@@ -331,7 +466,21 @@ class FirebaseRoomsSDK {
       // Subscribe to room changes
       this.unsubscribeRoom = onSnapshot(roomRef, (docSnap) => {
         const roomData = docSnap.data() as RoomData;
-        this._notifyListeners('roomStateChanged', roomData);
+        
+        // Check if user has been kicked
+        if (roomData && !roomData.members.includes(this.currentUser!.uid)) {
+          this.leaveRoom();
+          this._notifyListeners('dataReceived', {
+            type: 'system',
+            content: {
+              action: 'kicked',
+              message: 'You have been kicked from the room',
+              timestamp: new Date().toISOString()
+            }
+          });
+        } else {
+          this._notifyListeners('roomStateChanged', roomData);
+        }
       });
       
       // Subscribe to real-time messages
@@ -358,6 +507,16 @@ class FirebaseRoomsSDK {
       // Return room data
       const docSnap = await getDoc(roomRef);
       return docSnap.data() as RoomData;
+    }
+    
+    /**
+     * Verify that the current user has host privileges
+     */
+    private async _requireHostPrivileges(): Promise<void> {
+      const isHost = await this.isHost();
+      if (!isHost) {
+        throw new Error('Host privileges required for this operation.');
+      }
     }
     
     /**
@@ -392,6 +551,6 @@ class FirebaseRoomsSDK {
         throw new Error('Room required. Please join or create a room first.');
       }
     }
-  }
+}
   
-  export default FirebaseRoomsSDK;
+export default FirebaseRoomsSDK;
