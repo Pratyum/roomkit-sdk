@@ -16,6 +16,7 @@ import {
     arrayRemove,
     arrayUnion,
     collection,
+    deleteField,
     doc,
     Firestore,
     getDoc,
@@ -86,6 +87,7 @@ class FirebaseRoomsSDK {
       
       // Set initial display name from email
       if (userCredential.user && email) {
+        this.currentUser = userCredential.user;
         const nickname = email.split('@')[0];
         await this.updateNickname(nickname);
       }
@@ -102,6 +104,7 @@ class FirebaseRoomsSDK {
       
       // Set a generated nickname for anonymous users
       if (userCredential.user) {
+        this.currentUser = userCredential.user;
         const nickname = generateNickname();
         await this.updateNickname(nickname);
       }
@@ -238,7 +241,7 @@ class FirebaseRoomsSDK {
       // Delete member data
       await updateDoc(roomRef, {
         members: arrayRemove(this.currentUser!.uid),
-        [`memberData.${this.currentUser!.uid}`]: null
+        [`memberData.${this.currentUser!.uid}`]: deleteField()
       });
       
       this.currentRoom = null;
@@ -261,7 +264,7 @@ class FirebaseRoomsSDK {
       // Remove member from the room
       await updateDoc(roomRef, {
         members: arrayRemove(userId),
-        [`memberData.${userId}`]: null
+        [`memberData.${userId}`]: deleteField()
       });
       
       // Broadcast kick event
